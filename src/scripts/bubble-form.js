@@ -33,8 +33,18 @@ export function attachBubbleSubmission(form, {
     error.textContent = message;
   };
 
-  // Mautic still handles its response, success message and original redirect.
+  // Add the confirmed email before Mautic follows its configured redirect.
   const callback = (callbacks[formName] ??= {});
+  const previousResponseStart = callback.onResponseStart;
+  callback.onResponseStart = function (response) {
+    previousResponseStart?.call(this, response);
+    if ((response?.success === true || response?.success === 1) && !response.errorMessage &&
+        !Object.keys(response.validationErrors ?? {}).length && delivered && response.redirect) {
+      const destination = new URL(response.redirect, form.ownerDocument?.baseURI);
+      destination.searchParams.set('email', JSON.parse(delivered).email);
+      response.redirect = destination.href;
+    }
+  };
   const previousResponseEnd = callback.onResponseEnd;
   callback.onResponseEnd = function (response) {
     pending = false;
